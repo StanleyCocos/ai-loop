@@ -55,4 +55,5 @@ Pull requests should include:
 
 - Do not move temporary data into source folders.
 - Do not assume `app/` is permanently Flutter; keep it app-agnostic.
+- Build `dashboard/` with `Next.js + Ant Design + ProComponents` by default. Use `Ant Design Pro` as a style and layout reference only, not as a mandatory full-stack scaffold.
 - Update `README.md` and `docs/` when the repository structure changes.
