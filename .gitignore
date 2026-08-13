@@ -1,0 +1,25 @@
+# runtime outputs
+runs/
+artifacts/
+
+# local env / editor
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# flutter / dart
+.dart_tool/
+build/
+*.iml
+
