@@ -1,4 +1,4 @@
-from .figma_fetch import (
+from .figma import (
     build_layout_payload,
     build_prototype_markdown,
     compact_node,
