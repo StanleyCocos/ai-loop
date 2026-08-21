@@ -1,26 +1,55 @@
 # ai-loop
 
-AI-assisted repository for turning requirements into project changes, tests, and verification.
+`ai-loop` 是一个一键完成项目需求的 AI 自动化系统，目标覆盖：
+需求分析、反馈、任务编排、编码、测试、验收等全流程。
 
-## Architecture
+## 背景
 
-- `core/`: Python control plane. Handles task orchestration, agent coordination, Figma intake, and workflow steps.
-- `app/`: target application under work. It is app-agnostic and may be Flutter today or another stack later.
-- `dashboard/`: operator UI for tasks, logs, inputs/outputs, and artifact review. Built with `Next.js + Ant Design + ProComponents`.
-- `docs/`: project notes, conventions, requirements, and decisions.
-- `runs/`: per-task working directory for raw inputs, intermediate outputs, and logs.
-- `artifacts/`: durable task outputs, exports, builds, and reports.
-- `test/`: separate test project, not part of the main repository layout.
+这个项目要把原本需要反复人工推进的流程固定下来，让每次任务都能
+从需求输入开始，自动流转到实现、验证和交付，而不是每次重新搭建一遍上下文。
 
-## Workflow
+## 目标
 
-The repo is organized around a simple flow:
+最终系统应该支持这条闭环：
 
-`requirements -> core orchestration -> app changes -> tests and verification -> artifacts and dashboard review`
+`需求 -> 反馈 -> 任务编排 -> 编码 -> 测试 -> 验收 -> 产物沉淀`
 
-## Run
+目标不只是生成代码，而是让一次任务可以完整留下输入、决策、改动、
+日志、测试证据和最终产物，方便继续处理或人工复核。
 
-Dashboard:
+## 范围
+
+当前范围：
+
+- `core/`：Python 核心逻辑，负责 AI agent 调度和任务编排；
+- `dashboard/`：前台交互项目，负责接收用户数据、展示 core 的运行日志和结果；
+- `app/`：目标应用，需求会围绕它进行编码、测试和验收；
+- `artifacts/`：构建产物和最终输出；
+- `docs/`：需求文档、背景说明和项目约定；
+- `runs/`：每次运行的临时数据、过程产物和日志。
+
+暂不处理：
+
+- 把运行时数据直接当成源码维护；
+- 在核心流程未跑通前，先做复杂平台化扩展。
+
+## 当前状态
+
+仓库还处在早期。当前可工作的实现主要在 `core/`，已经有 Figma 输入采集
+和落盘能力，但完整的任务编排、编码、测试、验收链路还没有完成。
+
+## 架构
+
+- `core/`：Python 核心层，负责任务编排、agent 调度和自动化逻辑。
+- `dashboard/`：前台交互层，负责用户输入、状态展示、日志查看和结果反馈。
+- `app/`：目标应用层，承接需求落地、代码修改、测试和验收。
+- `docs/`：需求文档、背景说明、约定和决策记录。
+- `artifacts/`：构建产物、导出结果和最终交付物。
+- `runs/`：运行过程中的临时输入、日志和中间结果。
+
+## 运行
+
+Dashboard：
 
 ```bash
 cd dashboard
@@ -28,23 +57,22 @@ npm install
 npm run dev
 ```
 
-Core:
+Core：
 
 ```bash
 cd core
 uv run core
 ```
 
-App:
+App：
 
 ```bash
 cd app
 flutter run
 ```
 
-## Conventions
+## 约定
 
-- Keep temporary data in `runs/` or `artifacts/`; do not move it into source folders.
-- Keep `app/` generic; do not assume Flutter forever.
-- Treat `dashboard/` as the main UI for tasks, logs, and artifact review.
-- Update `README.md`, `AGENTS.md`, and `docs/` when the structure changes.
+- 临时数据放在 `runs/`，交付结果放在 `artifacts/`。
+- `docs/` 只放需求和项目约定，不放运行产物。
+- 仓库结构变化时，同步更新 `README.md`、`AGENTS.md` 和 `docs/`。
