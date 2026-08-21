@@ -1,15 +1,22 @@
 # ai-loop
 
-AI-assisted repository for orchestrating project work, target app delivery, and a visual dashboard.
+AI-assisted repository for turning requirements into project changes, tests, and verification.
 
-## Structure
+## Architecture
 
-- `core/`: orchestration, agent control, and Figma processing.
-- `app/`: the target application layer. It is app-agnostic and may be Flutter today or something else later.
-- `dashboard/`: the visual control center. It uses `Next.js + Ant Design + ProComponents`.
-- `docs/`: background, requirements, conventions, and project notes.
-- `runs/`: temporary per-task inputs, intermediate output, and logs.
-- `artifacts/`: task outputs, exports, builds, and reports.
+- `core/`: Python control plane. Handles task orchestration, agent coordination, Figma intake, and workflow steps.
+- `app/`: target application under work. It is app-agnostic and may be Flutter today or another stack later.
+- `dashboard/`: operator UI for tasks, logs, inputs/outputs, and artifact review. Built with `Next.js + Ant Design + ProComponents`.
+- `docs/`: project notes, conventions, requirements, and decisions.
+- `runs/`: per-task working directory for raw inputs, intermediate outputs, and logs.
+- `artifacts/`: durable task outputs, exports, builds, and reports.
+- `test/`: separate test project, not part of the main repository layout.
+
+## Workflow
+
+The repo is organized around a simple flow:
+
+`requirements -> core orchestration -> app changes -> tests and verification -> artifacts and dashboard review`
 
 ## Run
 
@@ -21,7 +28,19 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Core:
+
+```bash
+cd core
+uv run core
+```
+
+App:
+
+```bash
+cd app
+flutter run
+```
 
 ## Conventions
 
@@ -29,7 +48,3 @@ Open `http://localhost:3000`.
 - Keep `app/` generic; do not assume Flutter forever.
 - Treat `dashboard/` as the main UI for tasks, logs, and artifact review.
 - Update `README.md`, `AGENTS.md`, and `docs/` when the structure changes.
-
-## Notes
-
-The `test/` directory is a separate test project and is not part of the main repository layout.
