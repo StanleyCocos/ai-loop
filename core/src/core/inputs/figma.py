@@ -9,7 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-RUNS_DIR = Path(__file__).resolve().parents[5] / "runs"
+RUNS_DIR = Path(__file__).resolve().parents[3] / "runs"
 API_BASE = "https://api.figma.com/v1"
 
 
@@ -81,6 +81,42 @@ def fetch_dev_resources(file_key: str, node_id: str) -> dict:
     return request_json(url)
 
 
+def fetch_file(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}?branch_data=true")
+
+
+def fetch_file_meta(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}/meta")
+
+
+def fetch_file_comments(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}/comments")
+
+
+def fetch_file_components(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}/components")
+
+
+def fetch_file_styles(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}/styles")
+
+
+def fetch_file_image_fills(file_key: str) -> dict:
+    return request_json(f"{API_BASE}/files/{file_key}/images")
+
+
+def fetch_file_versions(file_key: str) -> dict:
+    pages: list[dict] = []
+    payload = request_json(f"{API_BASE}/files/{file_key}/versions")
+    pages.append(payload)
+    next_page = (payload.get("pagination") or {}).get("next_page")
+    while next_page:
+        payload = request_json(next_page)
+        pages.append(payload)
+        next_page = (payload.get("pagination") or {}).get("next_page")
+    return {"pages": pages}
+
+
 def fetch_image_url(file_key: str, node_id: str) -> str | None:
     url = f"{API_BASE}/images/{file_key}?ids={urllib.parse.quote(node_id, safe='')}&format=png&scale=2"
     payload = request_json(url)
@@ -138,7 +174,29 @@ def summarize_node(node: dict, level: int = 0) -> list[str]:
     return lines
 
 
+def collect_text_snippets(node: dict) -> list[str]:
+    snippets: list[str] = []
+    text = str(node.get("characters", "")).strip()
+    if text:
+        snippets.append(text)
+    for child in node.get("children", []):
+        if isinstance(child, dict):
+            snippets.extend(collect_text_snippets(child))
+    return snippets
+
+
+def build_requirement_summary(node: dict) -> list[str]:
+    seen: set[str] = set()
+    summary: list[str] = []
+    for snippet in collect_text_snippets(node):
+        if snippet not in seen:
+            seen.add(snippet)
+            summary.append(snippet)
+    return summary
+
+
 def build_prototype_markdown(kind: str, source_url: str, node: dict, dev_resources: dict | None) -> str:
+    requirement_summary = build_requirement_summary(node)
     lines = [
         f"# {kind} Figma 资料",
         "",
@@ -148,11 +206,15 @@ def build_prototype_markdown(kind: str, source_url: str, node: dict, dev_resourc
         f"- Node ID：{node.get('id', '')}",
         f"- 尺寸：{node.get('absoluteBoundingBox')}",
         "",
+    ]
+    if requirement_summary:
+        lines.extend(["## 需求信息", "", *[f"- {item}" for item in requirement_summary], ""])
+    lines.extend([
         "## 结构摘要",
         "",
         *summarize_node(node),
         "",
-    ]
+    ])
     if dev_resources:
         lines.extend(["## Dev Resources", "", json.dumps(dev_resources, ensure_ascii=False, indent=2), ""])
     return "\n".join(lines)
@@ -165,9 +227,14 @@ def build_layout_payload(kind: str, source_url: str, file_key: str, node_id: str
         "file_key": file_key,
         "node_id": node_id,
         "node": compact_node(node),
+        "requirements": build_requirement_summary(node),
         "image": image_url,
         "dev_resources": dev_resources,
     }
+
+
+def write_json_file(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def fetch_figma_links(raw_links: str, project: str, kind: str) -> Path:
@@ -184,6 +251,13 @@ def fetch_figma_links(raw_links: str, project: str, kind: str) -> Path:
         node_dir.mkdir(parents=True, exist_ok=True)
         try:
             file_key, node_id = parse_figma_url(link)
+            file_payload = fetch_file(file_key)
+            file_meta = fetch_file_meta(file_key)
+            file_comments = fetch_file_comments(file_key)
+            file_components = fetch_file_components(file_key)
+            file_styles = fetch_file_styles(file_key)
+            file_image_fills = fetch_file_image_fills(file_key)
+            file_versions = fetch_file_versions(file_key)
             node_payload = fetch_file_node(file_key, node_id)
             document = node_payload.get("document", {}) if isinstance(node_payload, dict) else {}
             try:
@@ -208,17 +282,21 @@ def fetch_figma_links(raw_links: str, project: str, kind: str) -> Path:
                 (raw_dir / file_name).write_bytes(urllib.request.urlopen(urllib.request.Request(image_url), timeout=60).read())
 
             layout = build_layout_payload(kind, link, file_key, node_id, document, image_path, dev_resources)
-            (node_dir / "node.json").write_text(json.dumps(node_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            (node_dir / "dev_resources.json").write_text(json.dumps(dev_resources, ensure_ascii=False, indent=2), encoding="utf-8")
-            (node_dir / "manifest.json").write_text(json.dumps(layout, ensure_ascii=False, indent=2), encoding="utf-8")
-            (node_dir / "layout.md").write_text(
-                build_prototype_markdown(kind, link, document, dev_resources),
-                encoding="utf-8",
-            )
+            write_json_file(node_dir / "file.json", file_payload)
+            write_json_file(node_dir / "file_meta.json", file_meta)
+            write_json_file(node_dir / "comments.json", file_comments)
+            write_json_file(node_dir / "components.json", file_components)
+            write_json_file(node_dir / "styles.json", file_styles)
+            write_json_file(node_dir / "image_fills.json", file_image_fills)
+            write_json_file(node_dir / "versions.json", file_versions)
+            write_json_file(node_dir / "node.json", node_payload)
+            write_json_file(node_dir / "dev_resources.json", dev_resources)
+            write_json_file(node_dir / "manifest.json", layout)
+            (node_dir / "layout.md").write_text(build_prototype_markdown(kind, link, document, dev_resources), encoding="utf-8")
             manifests.append(layout)
         except Exception as error:
             error_payload = {"source_url": link, "error": str(error)}
-            (node_dir / "manifest.json").write_text(json.dumps(error_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            write_json_file(node_dir / "manifest.json", error_payload)
             manifests.append(error_payload)
 
     (out_dir / "input.json").write_text(
@@ -238,15 +316,32 @@ def fetch_figma_links(raw_links: str, project: str, kind: str) -> Path:
 
 
 def main() -> int:
-    kind = input("请输入类型（需求原生/高真设计，默认高真设计）：").strip() or "高真设计"
-    links = input(f"请输入 {kind} Figma 链接，多个用英文逗号分割：").strip()
-    project = input("请输入项目名（直接回车默认 figma）：").strip() or "figma"
+    print("main:start", flush=True)
+    # 直接在这里手动填写即可
+    project = "figma"
+    kind = "高真设计"
+    prototype_url = "https://www.figma.com/design/Wri0aaE2EIaesO0u2LTDAS/%E8%BF%AD%E4%BB%A3%E7%89%88%E7%A4%BE%E5%8C%BA?node-id=2099-215&m=dev&focus-id=2099-215"
+    high_fidelity_urls = [
+        "https://www.figma.com/design/W0M3jAZpdBP7OdWfZwrqJE/%E7%A4%BE%E5%8C%BA%EF%BC%88%E6%AF%8F%E5%91%A8%E6%9B%B4%E6%96%B0%E7%89%88%EF%BC%89?node-id=1280-4791&m=dev&focus-id=1280-4791",
+        "https://www.figma.com/design/W0M3jAZpdBP7OdWfZwrqJE/%E7%A4%BE%E5%8C%BA%EF%BC%88%E6%AF%8F%E5%91%A8%E6%9B%B4%E6%96%B0%E7%89%88%EF%BC%89?node-id=1280-5041&m=dev&focus-id=1280-5041",
+        "https://www.figma.com/design/W0M3jAZpdBP7OdWfZwrqJE/%E7%A4%BE%E5%8C%BA%EF%BC%88%E6%AF%8F%E5%91%A8%E6%9B%B4%E6%96%B0%E7%89%88%EF%BC%89?node-id=1280-5197&m=dev&focus-id=1280-5197",
+        "https://www.figma.com/design/W0M3jAZpdBP7OdWfZwrqJE/%E7%A4%BE%E5%8C%BA%EF%BC%88%E6%AF%8F%E5%91%A8%E6%9B%B4%E6%96%B0%E7%89%88%EF%BC%89?node-id=1593-952&m=dev&focus-id=1593-952",
+        "https://www.figma.com/design/W0M3jAZpdBP7OdWfZwrqJE/%E7%A4%BE%E5%8C%BA%EF%BC%88%E6%AF%8F%E5%91%A8%E6%9B%B4%E6%96%B0%E7%89%88%EF%BC%89?node-id=1593-1307&m=dev&focus-id=1593-1307",
+    ]
+    links = [prototype_url] if kind == "需求原生" else [prototype_url, *high_fidelity_urls]
     try:
-        out_dir = fetch_figma_links(links, project, kind)
+        print(f"fetch:start kind={kind} links={len(links)}", flush=True)
+        out_dir = fetch_figma_links(",".join(links), project, kind)
     except Exception as error:
+        print(f"fetch:error {error}", flush=True)
         print(f"ERROR: {error}")
         return 1
+    print("fetch:done", flush=True)
     print(f"Figma 阶段目录：{out_dir}")
     print(f"原型文档：{out_dir / 'prototype.md'}")
     print(f"布局信息：{out_dir / 'figma_layout.json'}")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
